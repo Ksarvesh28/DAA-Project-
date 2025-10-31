@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Optimal Resource Allocation System</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background: #0f172a;
+    color: #f1f5f9;
+    margin: 0;
+    padding: 20px;
+  }
+  h1 {
+    text-align: center;
+    color: #60a5fa;
+  }
+  .container {
+    max-width: 800px;
+    margin: 0 auto;
+    background: #1e293b;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 0 15px rgba(0,0,0,0.3);
+  }
+  label {
+    display: block;
+    margin-top: 10px;
+  }
+  input, select, button {
+    margin-top: 5px;
+    padding: 8px;
+    border-radius: 5px;
+    border: none;
+  }
+  input, select {
+    width: 100%;
+  }
+  button {
+    background: #3b82f6;
+    color: white;
+    cursor: pointer;
+  }
+  button:hover {
+    background: #2563eb;
+  }
+  table {
+    width: 100%;
+    margin-top: 15px;
+    border-collapse: collapse;
+  }
+  th, td {
+    border: 1px solid #334155;
+    padding: 8px;
+    text-align: center;
+  }
+  th {
+    background: #1e40af;
+  }
+  .output {
+    margin-top: 20px;
+    background: #0f172a;
+    padding: 15px;
+    border-radius: 10px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Optimal Resource Allocation System</h1>
+<div class="container">
+  <h3>Add Job Details</h3>
+  <label>Job Title:</label>
+  <input type="text" id="jobTitle" placeholder="Enter job name (e.g., A)">
+  
+  <label>Deadline (in days):</label>
+  <input type="number" id="deadline" min="1" placeholder="e.g., 2">
+
+  <label>Profit:</label>
+  <input type="number" id="profit" min="1" placeholder="e.g., 50">
+
+  <button onclick="addJob()">Add Job</button>
+
+  <h3>Jobs List</h3>
+  <table id="jobsTable">
+    <thead>
+      <tr><th>Job Title</th><th>Deadline</th><th>Profit</th><th>Remove</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <h3>Select Scheduling Method</h3>
+  <select id="method">
+    <option value="profit">1. Schedule by Profit</option>
+    <option value="deadline">2. Schedule by Deadline</option>
+    <option value="ratio">3. Schedule by Profit/Deadline Ratio</option>
+  </select>
+  <button onclick="runSchedule()">Run Scheduling</button>
+
+  <div class="output" id="outputArea">
+    <h3>Result</h3>
+    <div id="resultText">No result yet.</div>
+  </div>
+</div>
+
+<script>
+let jobs = [];
+
+function addJob() {
+  const title = document.getElementById('jobTitle').value.trim();
+  const deadline = parseInt(document.getElementById('deadline').value);
+  const profit = parseInt(document.getElementById('profit').value);
+
+  if (!title || isNaN(deadline) || isNaN(profit)) {
+    alert("Please enter valid job details.");
+    return;
+  }
+
+  jobs.push({ title, deadline, profit });
+  renderJobs();
+
+  document.getElementById('jobTitle').value = '';
+  document.getElementById('deadline').value = '';
+  document.getElementById('profit').value = '';
+}
+
+function renderJobs() {
+  const tbody = document.querySelector("#jobsTable tbody");
+  tbody.innerHTML = '';
+  jobs.forEach((job, index) => {
+    const row = `<tr>
+      <td>${job.title}</td>
+      <td>${job.deadline}</td>
+      <td>${job.profit}</td>
+      <td><button onclick="removeJob(${index})">Remove</button></td>
+    </tr>`;
+    tbody.innerHTML += row;
+  });
+}
+
+function removeJob(index) {
+  jobs.splice(index, 1);
+  renderJobs();
+}
+
+function runSchedule() {
+  if (jobs.length === 0) {
+    alert("Please add jobs first.");
+    return;
+  }
+
+  const method = document.getElementById('method').value;
+  let result;
+
+  switch(method) {
+    case 'profit': result = scheduleByProfit(jobs); break;
+    case 'deadline': result = scheduleByDeadline(jobs); break;
+    case 'ratio': result = scheduleByRatio(jobs); break;
+  }
+
+  displayResult(result);
+}
+
+function maxDeadline(jobs) {
+  return Math.max(...jobs.map(j => j.deadline));
+}
+
+function scheduleByProfit(jobs) {
+  const sorted = [...jobs].sort((a,b)=>b.profit - a.profit);
+  const maxD = maxDeadline(sorted);
+  const slots = new Array(maxD+1).fill(null);
+  let totalProfit = 0;
+
+  sorted.forEach(job => {
+    for (let d = Math.min(job.deadline, maxD); d >= 1; d--) {
+      if (slots[d] === null) {
+        slots[d] = job;
+        totalProfit += job.profit;
+        break;
+      }
+    }
+  });
+  return { method: "By Profit", slots, totalProfit };
+}
+
+function scheduleByDeadline(jobs) {
+  const sorted = [...jobs].sort((a,b)=>a.deadline - b.deadline);
+  const maxD = maxDeadline(sorted);
+  const slots = new Array(maxD+1).fill(null);
+  let totalProfit = 0;
+
+  sorted.forEach(job => {
+    for (let s = 1; s <= Math.min(job.deadline, maxD); s++) {
+      if (slots[s] === null) {
+        slots[s] = job;
+        totalProfit += job.profit;
+        break;
+      }
+    }
+  });
+  return { method: "By Deadline", slots, totalProfit };
+}
+
+function scheduleByRatio(jobs) {
+  const sorted = [...jobs].sort((a,b)=>(b.profit/b.deadline) - (a.profit/a.deadline));
+  const maxD = maxDeadline(sorted);
+  const slots = new Array(maxD+1).fill(null);
+  let totalProfit = 0;
+
+  sorted.forEach(job => {
+    for (let d = Math.min(job.deadline, maxD); d >= 1; d--) {
+      if (slots[d] === null) {
+        slots[d] = job;
+        totalProfit += job.profit;
+        break;
+      }
+    }
+  });
+  return { method: "By Profit/Deadline Ratio", slots, totalProfit };
+}
+
+function displayResult({ method, slots, totalProfit }) {
+  const tableRows = slots.map((job, i) => {
+    if (i === 0) return "";
+    return `<tr><td>${i}</td><td>${job ? job.title : "[free]"}</td><td>${job ? job.deadline : "-"}</td><td>${job ? job.profit : "-"}</td></tr>`;
+  }).join("");
+
+  document.getElementById("resultText").innerHTML = `
+    <h4>Scheduling Method: ${method}</h4>
+    <table>
+      <tr><th>Slot</th><th>Job Title</th><th>Deadline</th><th>Profit</th></tr>
+      ${tableRows}
+    </table>
+    <p><strong>Total Profit:</strong> ${totalProfit}</p>
+  `;
+}
+</script>
+</body>
+</html>
