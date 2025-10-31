@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-900">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Optimal Resource Allocation System</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Use Inter font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom scrollbar for text area */
+        textarea::-webkit-scrollbar {
+            width: 8px;
+        }
+        textarea::-webkit-scrollbar-track {
+            background: #2d3748;
+            border-radius: 4px;
+        }
+        textarea::-webkit-scrollbar-thumb {
+            background: #4a5568;
+            border-radius: 4px;
+        }
+        textarea::-webkit-scrollbar-thumb:hover {
+            background: #718096;
+        }
+    </style>
+</head>
+<body class="h-full text-gray-100">
+    <div class="container mx-auto max-w-5xl p-4 md:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-white">Optimal Resource Allocation System</h1>
+            <p class="text-lg text-gray-400 mt-2">Compare Greedy vs. Brute Force Algorithms in JavaScript</p>
+        </header>
+
+        <main>
+            <!-- Input Section -->
+            <div class="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
+                <label for="jobData" class="block text-sm font-medium text-gray-300 mb-2">Job Data (JSON format)</label>
+                <textarea id="jobData" rows="10" class="w-full p-4 bg-gray-900 border border-gray-700 rounded-lg text-gray-200 focus:ring-2 focus:ring-blue-500 focus:outline-none focus:border-blue-500 transition-all"></textarea>
+                <button id="runButton" class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:-translate-y-1">
+                    Run Allocation Algorithms
+                </button>
+                <div id="error-message" class="text-red-400 mt-4 text-center font-medium hidden"></div>
+            </div>
+
+            <!-- Results Section -->
+            <div id="results" class="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6 hidden">
+                <!-- Greedy Result Card -->
+                <div class="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
+                    <h2 class="text-2xl font-semibold text-white mb-4">Greedy Allocation Result</h2>
+                    <div class="space-y-3">
+                        <div>
+                            <span class="font-medium text-gray-400">Total Profit:</span>
+                            <span id="greedy-profit" class="text-2xl font-bold text-blue-400 ml-2"></span>
+                        </div>
+                        <div>
+                            <span class="font-medium text-gray-400">Sequence:</span>
+                            <code id="greedy-sequence" class="block bg-gray-900 p-3 rounded-md text-gray-300 mt-1 text-sm"></code>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Brute Force Result Card -->
+                <div class="bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700">
+                    <h2 class="text-2xl font-semibold text-white mb-4">💡 Brute Force Result</h2>
+                    <div class="space-y-3">
+                        <div>
+                            <span class="font-medium text-gray-400">Total Profit:</span>
+                            <span id="brute-profit" class="text-2xl font-bold text-green-400 ml-2"></span>
+                        </div>
+                        <div>
+                            <span class="font-medium text-gray-400">Sequence:</span>
+                            <code id="brute-sequence" class="block bg-gray-900 p-3 rounded-md text-gray-300 mt-1 text-sm"></code>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Visualization Section -->
+            <div id="chart-container" class="mt-8 bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-700 hidden">
+                <h2 class="text-2xl font-semibold text-white mb-4 text-center">Profit Comparison</h2>
+                <canvas id="profitChart"></canvas>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Store chart instance globally to destroy it before re-drawing
+        let myProfitChart = null;
+        const jobDataEl = document.getElementById('jobData');
+        const runButton = document.getElementById('runButton');
+        const resultsEl = document.getElementById('results');
+        const chartContainerEl = document.getElementById('chart-container');
+        const errorMessageEl = document.getElementById('error-message');
+
+        // Set default job data
+        const defaultJobs = [
+            {"JobID": "A", "Profit": 100, "Deadline": 2},
+            {"JobID": "B", "Profit": 19, "Deadline": 1},
+            {"JobID": "C", "Profit": 27, "Deadline": 2},
+            {"JobID": "D", "Profit": 25, "Deadline": 1},
+            {"JobID": "E", "Profit": 15, "Deadline": 3},
+        ];
+        jobDataEl.value = JSON.stringify(defaultJobs, null, 4);
+
+        runButton.addEventListener('click', () => {
+            let jobs;
+            // Clear previous errors and hide results
+            errorMessageEl.classList.add('hidden');
+            resultsEl.classList.add('hidden');
+            chartContainerEl.classList.add('hidden');
+
+            // 1. Parse Input
+            try {
+                jobs = JSON.parse(jobDataEl.value);
+                if (!Array.isArray(jobs) || jobs.length === 0) {
+                    throw new Error("Input must be a non-empty array of jobs.");
+                }
+                // Basic validation
+                if (!jobs.every(j => j.hasOwnProperty('JobID') && j.hasOwnProperty('Profit') && j.hasOwnProperty('Deadline'))) {
+                    throw new Error("Each job must have 'JobID', 'Profit', and 'Deadline' properties.");
+                }
+            } catch (error) {
+                errorMessageEl.textContent = `Invalid JSON: ${error.message}`;
+                errorMessageEl.classList.remove('hidden');
+                return;
+            }
+
+            // 2. Run Algorithms
+            runButton.disabled = true;
+            runButton.textContent = "Calculating...";
+
+            // Use setTimeout to allow the UI to update to "Calculating..."
+            // This is especially important for the slow Brute Force algorithm
+            setTimeout(() => {
+                try {
+                    const greedyResult = resource_allocation_greedy(jobs);
+                    const bruteResult = resource_allocation_bruteforce(jobs);
+
+                    // 3. Display Results
+                    document.getElementById('greedy-profit').textContent = greedyResult.totalProfit;
+                    document.getElementById('greedy-sequence').textContent = JSON.stringify(greedyResult.allocatedJobs);
+                    
+                    document.getElementById('brute-profit').textContent = bruteResult.maxProfit;
+                    document.getElementById('brute-sequence').textContent = JSON.stringify(bruteResult.bestSequence);
+
+                    resultsEl.classList.remove('hidden');
+
+                    // 4. Draw Chart
+                    drawChart(greedyResult.totalProfit, bruteResult.maxProfit);
+                    chartContainerEl.classList.remove('hidden');
+
+                } catch (error) {
+                    errorMessageEl.textContent = `Error during calculation: ${error.message}`;
+                    errorMessageEl.classList.remove('hidden');
+                } finally {
+                    runButton.disabled = false;
+                    runButton.textContent = "Run Allocation Algorithms";
+                }
+            }, 50); // 50ms delay
+        });
+
+        /**
+         * Greedy Algorithm Implementation (Ported from Python)
+         */
+        function resource_allocation_greedy(jobs) {
+            // Create a deep copy to avoid modifying the original array
+            const sortedJobs = JSON.parse(JSON.stringify(jobs));
+            
+            // Sort jobs by profit in descending order
+            sortedJobs.sort((a, b) => b.Profit - a.Profit);
+
+            const maxDeadline = Math.max(...sortedJobs.map(job => job.Deadline));
+            // Use an object as a sparse array for slots (like a dictionary)
+            const slots = {}; 
+            let totalProfit = 0;
+            const allocatedJobDetails = []; // To store the jobs in their slot order
+
+            for (const job of sortedJobs) {
+                for (let slot = job.Deadline; slot > 0; slot--) {
+                    if (!slots[slot]) { // If slot is empty
+                        slots[slot] = job.JobID;
+                        totalProfit += job.Profit;
+                        allocatedJobDetails.push({ slot: slot, JobID: job.JobID });
+                        break; // Job placed, move to next job
+                    }
+                }
+            }
+
+            // Sort the final sequence by slot number for correct output
+            const allocatedJobs = allocatedJobDetails
+                .sort((a, b) => a.slot - b.slot)
+                .map(j => j.JobID);
+
+            return { allocatedJobs, totalProfit };
+        }
+
+        /**
+         * Brute Force Algorithm Implementation (Ported from Python)
+         */
+        function resource_allocation_bruteforce(jobs) {
+            let maxProfit = 0;
+            let bestSequence = [];
+
+            // Helper function to generate permutations (replaces itertools.permutations)
+            function* permutations(array, r) {
+                const n = array.length;
+                if (r > n) return;
+                
+                const indices = Array.from({ length: n }, (_, i) => i);
+                const cycles = Array.from({ length: r }, (_, i) => n - i);
+                
+                yield array.slice(0, r).map(i => i); // Initial permutation
+                
+                while (true) {
+                    let i = r - 1;
+                    while (i >= 0) {
+                        cycles[i]--;
+                        if (cycles[i] === 0) {
+                            const first = indices[i];
+                            for (let j = i; j < n - 1; j++) {
+                                indices[j] = indices[j + 1];
+                            }
+                            indices[n - 1] = first;
+                            cycles[i] = n - i;
+                        } else {
+                            const j = cycles[i];
+                            const swapIndex = n - j;
+                            [indices[i], indices[swapIndex]] = [indices[swapIndex], indices[i]];
+                            
+                            const result = [];
+                            for (let k = 0; k < r; k++) {
+                                result.push(array[indices[k]]);
+                            }
+                            yield result;
+                            break;
+                        }
+                        i--;
+                    }
+                    if (i < 0) break;
+                }
+            }
+
+            // Loop from r=1 to r=jobs.length (all subset sizes)
+            for (let r = 1; r <= jobs.length; r++) {
+                // Get all permutations of size r
+                for (const subset of permutations(jobs, r)) {
+                    let usedCapacity = 0;
+                    let profit = 0;
+                    let currentSequence = [];
+
+                    for (const job of subset) {
+                        usedCapacity++;
+                        if (usedCapacity <= job.Deadline) {
+                            profit += job.Profit;
+                            currentSequence.push(job.JobID);
+                        }
+                        // Note: Your original Python code continues to add profit
+                        // even if a previous job in the sequence was invalid.
+                        // This implementation matches that logic.
+                        // A stricter version might 'break' if a job is invalid.
+                    }
+
+                    if (profit > maxProfit) {
+                        maxProfit = profit;
+                        // The sequence is the list of jobs that *actually* fit
+                        bestSequence = currentSequence; 
+                    }
+                }
+            }
+            return { bestSequence, maxProfit };
+        }
+        
+        /**
+         * Draw the profit comparison chart using Chart.js
+         */
+        function drawChart(greedyProfit, bruteProfit) {
+            const ctx = document.getElementById('profitChart').getContext('2d');
+
+            // Destroy the old chart instance if it exists
+            if (myProfitChart) {
+                myProfitChart.destroy();
+            }
+
+            myProfitChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Greedy', 'Brute Force'],
+                    datasets: [{
+                        label: 'Total Profit',
+                        data: [greedyProfit, bruteProfit],
+                        backgroundColor: [
+                            'rgba(96, 165, 250, 0.7)', // blue-400
+                            'rgba(74, 222, 128, 0.7)' // green-400
+                        ],
+                        borderColor: [
+                            'rgba(96, 165, 250, 1)',
+                            'rgba(74, 222, 128, 1)'
+                        ],
+                        borderWidth: 1,
+                        borderRadius: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        title: {
+                            display: true,
+                            text: 'Profit Comparison: Greedy vs Brute Force',
+                            color: '#e5e7eb', // gray-200
+                            font: {
+                                size: 16,
+                                weight: '600'
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)' // White with low opacity
+                            },
+                            ticks: {
+                                color: '#d1d5db' // gray-300
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                color: '#d1d5db', // gray-300
+                                font: {
+                                    size: 14,
+                                    weight: '500'
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+    </script>
+</body>
+</html>
